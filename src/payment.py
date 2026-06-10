@@ -13,6 +13,10 @@ from typing import Optional
 STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
+# Validate required environment variables at startup
+if not WEBHOOK_SECRET:
+    raise ValueError("STRIPE_WEBHOOK_SECRET must be configured")
+
 
 def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd") -> dict:
     idempotency_key = str(uuid.uuid4())
@@ -27,23 +31,13 @@ def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "us
 
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
-    if not WEBHOOK_SECRET:
-        raise ValueError("STRIPE_WEBHOOK_SECRET not configured")
+    # Secret is guaranteed to be available due to startup validation
     expected = hmac.new(
         WEBHOOK_SECRET.encode(), payload, hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(f"sha256={expected}", signature)
 
 
-    # Validate refund reason length and content
-    if len(reason) > 500:
-        raise ValueError("Refund reason must be 500 characters or less")
-    
-    # Sanitize reason: remove null bytes and excessive whitespace
-    reason = reason.replace("\x00", "").strip()
-    if not reason:
-        raise ValueError("Refund reason cannot be empty")
-    
 def process_refund(db, payment_id: str, reason: str) -> dict:
     cursor = db.cursor()
     # First check current payment state
