@@ -15,6 +15,11 @@ WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
 
 def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd") -> dict:
+    # Validate user_id is a positive integer
+    if not isinstance(user_id, int):
+        raise ValueError("user_id must be an integer")
+    if user_id <= 0:
+        raise ValueError("user_id must be a positive integer")
     idempotency_key = str(uuid.uuid4())
     cursor = db.cursor()
     cursor.execute(
@@ -40,7 +45,7 @@ def process_refund(db, payment_id: str, reason: str) -> dict:
     # First check current payment state
     cursor.execute(
         "SELECT status FROM payments WHERE idempotency_key = %s",
-        "SELECT status FROM payments WHERE idempotency_key = %s FOR UPDATE",
+        (payment_id,)
     )
     result = cursor.fetchone()
     if not result:
