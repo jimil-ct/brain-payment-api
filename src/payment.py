@@ -35,6 +35,15 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     return hmac.compare_digest(f"sha256={expected}", signature)
 
 
+    # Validate refund reason length and content
+    if len(reason) > 500:
+        raise ValueError("Refund reason must be 500 characters or less")
+    
+    # Sanitize reason: remove null bytes and excessive whitespace
+    reason = reason.replace("\x00", "").strip()
+    if not reason:
+        raise ValueError("Refund reason cannot be empty")
+    
 def process_refund(db, payment_id: str, reason: str) -> dict:
     cursor = db.cursor()
     # First check current payment state
