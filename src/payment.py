@@ -14,7 +14,13 @@ STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
 
-def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd") -> dict:
+def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd", caller_user_id: Optional[int] = None, is_admin: bool = False) -> dict:
+    # Authorization check: caller must be the user or have admin privileges
+    if caller_user_id is None:
+        raise ValueError("caller_user_id is required for authorization")
+    if not is_admin and caller_user_id != user_id:
+        raise PermissionError(f"User {caller_user_id} not authorized to create payment for user {user_id}")
+    
     idempotency_key = str(uuid.uuid4())
     cursor = db.cursor()
     cursor.execute(
