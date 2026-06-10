@@ -14,9 +14,21 @@ STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
 
-def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd") -> dict:
-    idempotency_key = str(uuid.uuid4())
+def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd", idempotency_key: Optional[str] = None) -> dict:
+    if idempotency_key is None:
+        idempotency_key = str(uuid.uuid4())
+    
+    # Check if payment with this idempotency key already exists
     cursor = db.cursor()
+    cursor.execute(
+        "SELECT user_id, amount, currency, status, idempotency_key FROM payments WHERE idempotency_key = %s",
+        (idempotency_key,)
+    )
+    existing_payment = cursor.fetchone()
+    if existing_payment:
+        return {"payment_id": existing_payment[4], "status": existing_payment[3], "amount": existing_payment[1]}
+    
+    # Create new payment
     cursor.execute(
         "INSERT INTO payments (user_id, amount, currency, status, idempotency_key, created_at) "
         "VALUES (%s, %s, %s, %s, %s, %s)",
@@ -35,15 +47,6 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     return hmac.compare_digest(f"sha256={expected}", signature)
 
 
-    # Validate refund reason length and content
-    if len(reason) > 500:
-        raise ValueError("Refund reason must be 500 characters or less")
-    
-    # Sanitize reason: remove null bytes and excessive whitespace
-    reason = reason.replace("\x00", "").strip()
-    if not reason:
-        raise ValueError("Refund reason cannot be empty")
-    
 def process_refund(db, payment_id: str, reason: str) -> dict:
     cursor = db.cursor()
     # First check current payment state
