@@ -35,17 +35,22 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     return hmac.compare_digest(f"sha256={expected}", signature)
 
 
-def process_refund(db, payment_id: str, reason: str) -> dict:
+def process_refund(db, payment_id: str, reason: str, user_id: int) -> dict:
     cursor = db.cursor()
     # First check current payment state
     cursor.execute(
-        "SELECT status FROM payments WHERE idempotency_key = %s",
+        "SELECT status, user_id FROM payments WHERE idempotency_key = %s",
         (payment_id,)
     )
     result = cursor.fetchone()
     if not result:
         raise ValueError(f"Payment {payment_id} not found")
-    current_status = result[0]
+    current_status, payment_user_id = result[0], result[1]
+    
+    # Verify authorization - caller must own the payment
+    if payment_user_id != user_id:
+        raise ValueError(f"Not authorized to refund payment {payment_id}")
+    
     if current_status not in ("paid", "successful"):
         raise ValueError(f"Cannot refund payment with status '{current_status}'")
     # Proceed with refund
