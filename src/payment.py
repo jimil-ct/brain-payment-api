@@ -37,6 +37,18 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
 
 def process_refund(db, payment_id: str, reason: str) -> dict:
     cursor = db.cursor()
+    # First check current payment state
+    cursor.execute(
+        "SELECT status FROM payments WHERE idempotency_key = %s",
+        (payment_id,)
+    )
+    result = cursor.fetchone()
+    if not result:
+        raise ValueError(f"Payment {payment_id} not found")
+    current_status = result[0]
+    if current_status not in ("paid", "successful"):
+        raise ValueError(f"Cannot refund payment with status '{current_status}'")
+    # Proceed with refund
     cursor.execute(
         "UPDATE payments SET status = %s, refund_reason = %s, updated_at = %s WHERE idempotency_key = %s",
         ("refunded", reason, datetime.now(timezone.utc), payment_id),
