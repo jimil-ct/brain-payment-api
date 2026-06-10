@@ -29,6 +29,7 @@ def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "us
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
         raise ValueError("STRIPE_WEBHOOK_SECRET not configured")
+        raise ValueError("Webhook configuration error")
     expected = hmac.new(
         WEBHOOK_SECRET.encode(), payload, hashlib.sha256
     ).hexdigest()
@@ -40,7 +41,7 @@ def process_refund(db, payment_id: str, reason: str) -> dict:
     # First check current payment state
     cursor.execute(
         "SELECT status FROM payments WHERE idempotency_key = %s",
-        "SELECT status FROM payments WHERE idempotency_key = %s FOR UPDATE",
+        (payment_id,)
     )
     result = cursor.fetchone()
     if not result:
