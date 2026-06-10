@@ -3,10 +3,9 @@ Author: Jimil Joshi
 """
 from datetime import datetime, timezone
 from decimal import Decimal
-from decimal import InvalidOperation
 
 
-def generate_invoice(db, user_id: int, items: list[dict]) -> dict:
+def generate_invoice(db, user_id: int, items: list[dict], tax_rate: Decimal = Decimal("0.18")) -> dict:
     # Validate items list
     if not items or not isinstance(items, list):
         raise ValueError("Items must be a non-empty list")
@@ -18,14 +17,11 @@ def generate_invoice(db, user_id: int, items: list[dict]) -> dict:
     for item in items:
         if not isinstance(item, dict) or "amount" not in item:
             raise ValueError("Each item must be a dict with 'amount' key")
-        try:
-            amount = Decimal(str(item["amount"]))
-        except (ValueError, TypeError, InvalidOperation):
-            raise ValueError(f"Invalid amount value: {item.get('amount', 'missing')}")
+        amount = Decimal(str(item["amount"]))
         if amount < 0 or amount > Decimal("1000000"):  # Prevent negative amounts and unreasonable values
             raise ValueError("Item amount must be positive and reasonable")
         total += amount
-    tax = total * Decimal("0.18")
+    tax = total * tax_rate
     cursor = db.cursor()
     cursor.execute(
         "INSERT INTO invoices (user_id, subtotal, tax, total, status, created_at) "
