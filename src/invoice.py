@@ -3,11 +3,16 @@ Author: Jimil Joshi
 """
 from datetime import datetime, timezone
 from decimal import Decimal
-from decimal import InvalidOperation
 
 
 def generate_invoice(db, user_id: int, items: list[dict]) -> dict:
     # Validate items list
+    # Authorization check: verify user exists and is authorized
+    cursor = db.cursor()
+    cursor.execute("SELECT id FROM users WHERE id = %s AND active = true", (user_id,))
+    if not cursor.fetchone():
+        raise PermissionError(f"User {user_id} not authorized for invoice generation")
+ 
     if not items or not isinstance(items, list):
         raise ValueError("Items must be a non-empty list")
     if len(items) > 1000:  # Reasonable upper bound
@@ -18,10 +23,7 @@ def generate_invoice(db, user_id: int, items: list[dict]) -> dict:
     for item in items:
         if not isinstance(item, dict) or "amount" not in item:
             raise ValueError("Each item must be a dict with 'amount' key")
-        try:
-            amount = Decimal(str(item["amount"]))
-        except (ValueError, TypeError, InvalidOperation):
-            raise ValueError(f"Invalid amount value: {item.get('amount', 'missing')}")
+        amount = Decimal(str(item["amount"]))
         if amount < 0 or amount > Decimal("1000000"):  # Prevent negative amounts and unreasonable values
             raise ValueError("Item amount must be positive and reasonable")
         total += amount
