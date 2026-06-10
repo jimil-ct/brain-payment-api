@@ -16,13 +16,17 @@ WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
 def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "usd") -> dict:
     idempotency_key = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute(
-        "INSERT INTO payments (user_id, amount, currency, status, idempotency_key, created_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s)",
-        (user_id, str(amount), currency, "pending", idempotency_key, datetime.now(timezone.utc)),
-    )
-    db.commit()
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO payments (user_id, amount, currency, status, idempotency_key, created_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, str(amount), currency, "pending", idempotency_key, datetime.now(timezone.utc)),
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise RuntimeError(f"Payment creation failed: {str(e)}") from e
     return {"payment_id": idempotency_key, "status": "pending", "amount": str(amount)}
 
 
@@ -40,7 +44,7 @@ def process_refund(db, payment_id: str, reason: str) -> dict:
     # First check current payment state
     cursor.execute(
         "SELECT status FROM payments WHERE idempotency_key = %s",
-        "SELECT status FROM payments WHERE idempotency_key = %s FOR UPDATE",
+        (payment_id,)
     )
     result = cursor.fetchone()
     if not result:
