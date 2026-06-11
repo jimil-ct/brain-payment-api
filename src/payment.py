@@ -21,13 +21,17 @@ def create_payment_intent(db, user_id: int, amount: Decimal, currency: str = "us
     if user_id <= 0:
         raise ValueError("user_id must be a positive integer")
     idempotency_key = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute(
-        "INSERT INTO payments (user_id, amount, currency, status, idempotency_key, created_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s)",
-        (user_id, str(amount), currency, "pending", idempotency_key, datetime.now(timezone.utc)),
-    )
-    db.commit()
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO payments (user_id, amount, currency, status, idempotency_key, created_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, str(amount), currency, "pending", idempotency_key, datetime.now(timezone.utc)),
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise RuntimeError(f"Payment creation failed: {str(e)}") from e
     return {"payment_id": idempotency_key, "status": "pending", "amount": str(amount)}
 
 
